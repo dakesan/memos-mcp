@@ -3,8 +3,6 @@ import { z } from "zod";
 import { formatMemo, formatMemoList } from "../format.ts";
 import type { MemosClient } from "../memos-client.ts";
 
-const BY_RURU_TAG = "\n\n#by_Ruru";
-
 export function registerMemoTools(
 	server: McpServer,
 	client: MemosClient,
@@ -22,8 +20,7 @@ export function registerMemoTools(
 			},
 		},
 		async (args) => {
-			const content = args.content + BY_RURU_TAG;
-			const memo = await client.createMemo(content, args.visibility);
+			const memo = await client.createMemo(args.content, args.visibility);
 
 			return {
 				content: [

@@ -3,8 +3,6 @@ import { z } from "zod";
 import { formatComment, formatCommentList } from "../format.ts";
 import type { MemosClient } from "../memos-client.ts";
 
-const BY_RURU_TAG = "\n\n#by_Ruru";
-
 /** name フィールド（例: "memos/1"）から数値 ID を抽出する */
 function extractMemoId(name: string): string {
 	const match = name.match(/^memos\/(\d+)$/);
@@ -51,8 +49,7 @@ export function registerCommentTools(
 			}
 
 			try {
-				const content = args.content + BY_RURU_TAG;
-				const comment = await client.createComment(memoId, content);
+				const comment = await client.createComment(memoId, args.content);
 
 				return {
 					content: [
