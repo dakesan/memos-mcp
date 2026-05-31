@@ -20,7 +20,12 @@ export function registerMemoTools(
 			},
 		},
 		async (args) => {
-			const memo = await client.createMemo(args.content, args.visibility);
+			const autoTag = process.env.MEMOS_AUTO_TAG?.trim();
+			const content =
+				autoTag && autoTag.length > 0
+					? `${args.content}\n\n${autoTag}`
+					: args.content;
+			const memo = await client.createMemo(content, args.visibility);
 
 			return {
 				content: [

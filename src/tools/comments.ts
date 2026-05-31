@@ -49,7 +49,12 @@ export function registerCommentTools(
 			}
 
 			try {
-				const comment = await client.createComment(memoId, args.content);
+				const autoTag = process.env.MEMOS_AUTO_TAG?.trim();
+				const content =
+					autoTag && autoTag.length > 0
+						? `${args.content}\n\n${autoTag}`
+						: args.content;
+				const comment = await client.createComment(memoId, content);
 
 				return {
 					content: [
