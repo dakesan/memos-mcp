@@ -37,11 +37,17 @@
 	},
 	"license": "MIT",
 	"author": "arrow2nd",
+	"contributors": [
+		"dakesan <ho@logomix.bio>"
+	],
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/arrow2nd/ruru-memos-mcp.git"
+		"url": "git+https://github.com/dakesan/memos-mcp.git"
 	},
-	"homepage": "https://github.com/arrow2nd/ruru-memos-mcp#readme",
+	"homepage": "https://github.com/dakesan/memos-mcp#readme",
+	"bugs": {
+		"url": "https://github.com/dakesan/memos-mcp/issues"
+	},
 	"keywords": [
 		"mcp",
 		"memos",
