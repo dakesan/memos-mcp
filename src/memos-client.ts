@@ -8,6 +8,7 @@ type Memo = {
 	uid: string;
 	content: string;
 	visibility: string;
+	state?: string;
 	createTime: string;
 	updateTime: string;
 	displayTime: string;
@@ -70,6 +71,34 @@ export class MemosClient {
 
 	async getMemo(id: string): Promise<Memo> {
 		return this.request<Memo>(`/memos/${id}`);
+	}
+
+	async updateMemoContent(id: string, content: string): Promise<Memo> {
+		return this.request<Memo>(`/memos/${id}?updateMask=content`, {
+			method: "PATCH",
+			body: JSON.stringify({ content }),
+		});
+	}
+
+	async setMemoState(id: string, state: "NORMAL" | "ARCHIVED"): Promise<Memo> {
+		return this.request<Memo>(`/memos/${id}?updateMask=state`, {
+			method: "PATCH",
+			body: JSON.stringify({ state }),
+		});
+	}
+
+	async deleteMemo(id: string): Promise<void> {
+		const url = `${this.baseUrl}/api/v1/memos/${id}`;
+		const res = await fetch(url, {
+			method: "DELETE",
+			headers: {
+				Authorization: `Bearer ${this.accessToken}`,
+			},
+		});
+		if (!res.ok) {
+			const body = await res.text();
+			throw new Error(`Memos API エラー (${res.status}): ${body}`);
+		}
 	}
 
 	async listMemos(

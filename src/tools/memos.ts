@@ -126,4 +126,101 @@ export function registerMemoTools(
 			};
 		},
 	);
+
+	server.registerTool(
+		"get_memo",
+		{
+			description:
+				"単一メモを取得する。name の uid 部分（memos/<uid> の <uid>）を渡す",
+			inputSchema: {
+				id: z
+					.string()
+					.describe("メモの uid（name が memos/<uid> の場合の <uid> 部分）"),
+			},
+		},
+		async (args) => {
+			const memo = await client.getMemo(args.id);
+			return {
+				content: [{ type: "text" as const, text: formatMemo(memo) }],
+			};
+		},
+	);
+
+	server.registerTool(
+		"update_memo",
+		{
+			description:
+				"既存メモの本文を書き換える（reformat 等）。返り値に書き換え前の元本文(previousContent)を含むので、上書き前に必ず保全すること。破壊的操作のため、organize ワークフローでは事前バックアップ必須。",
+			inputSchema: {
+				id: z.string().describe("メモの uid（memos/<uid> の <uid>）"),
+				content: z
+					.string()
+					.describe("新しい本文（既存本文を完全に置き換える）"),
+			},
+		},
+		async (args) => {
+			const before = await client.getMemo(args.id);
+			const updated = await client.updateMemoContent(args.id, args.content);
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: [
+							"updated: true",
+							"previousContent: |",
+							before.content
+								.split("\n")
+								.map((l) => `  ${l}`)
+								.join("\n"),
+							"---",
+							formatMemo(updated),
+						].join("\n"),
+					},
+				],
+			};
+		},
+	);
+
+	server.registerTool(
+		"archive_memo",
+		{
+			description:
+				"メモを ARCHIVED 状態にする（可逆。state を NORMAL に戻せば復元可能）。メモを「消す」際は delete ではなくまず archive を使うこと。state に NORMAL を渡せばアーカイブ解除。",
+			inputSchema: {
+				id: z.string().describe("メモの uid（memos/<uid> の <uid>）"),
+				state: z
+					.enum(["ARCHIVED", "NORMAL"])
+					.optional()
+					.describe("設定する状態（デフォルト: ARCHIVED）"),
+			},
+		},
+		async (args) => {
+			const memo = await client.setMemoState(args.id, args.state ?? "ARCHIVED");
+			return {
+				content: [{ type: "text" as const, text: formatMemo(memo) }],
+			};
+		},
+	);
+
+	server.registerTool(
+		"delete_memo",
+		{
+			description:
+				"メモを物理削除する。【不可逆】復元できない。通常は archive_memo で ARCHIVED にする方を推奨。本当に削除して良いと確認できた場合のみ使用すること。",
+			inputSchema: {
+				id: z.string().describe("メモの uid（memos/<uid> の <uid>）"),
+			},
+		},
+		async (args) => {
+			await client.deleteMemo(args.id);
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `deleted: true\nname: memos/${args.id}`,
+					},
+				],
+			};
+		},
+	);
 }

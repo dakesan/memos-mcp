@@ -1,4 +1,7 @@
 node_modules/
-dist/
 .env
 *.tgz
+
+# dist/ is committed: the Claude Code plugin ships a prebuilt, self-contained
+# dist/index.js (deps bundled via tsup noExternal) so the MCP server runs on
+# install without a build step. Rebuild with `npm run build` after editing src/.
