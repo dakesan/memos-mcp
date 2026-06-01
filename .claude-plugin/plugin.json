@@ -1,6 +1,7 @@
 {
   "name": "memos",
-  "description": "Self-hosted memos via MCP — create, read, search, reformat, archive, delete, and organize memos. Bundles the memos MCP server and the memos skill.",
+  "version": "0.2.0",
+  "description": "Self-hosted memos via MCP — create, read, search, reformat, archive, delete, and bulk-reorganize memos. Bundles the memos MCP server and two skills: `manage` (capture / TODO / single-memo cleanup) and `rearrange` (theme-grouped bulk reorganization).",
   "author": {
     "name": "dakesan",
     "email": "ho@logomix.bio"

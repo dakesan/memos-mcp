@@ -1,17 +1,20 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "memos",
   "owner": {
     "name": "dakesan",
     "email": "ho@logomix.bio"
   },
   "metadata": {
-    "description": "memos MCP server + skill, installable as a single Claude Code plugin."
+    "description": "memos MCP server + skills, installable as a single Claude Code plugin."
   },
   "plugins": [
     {
       "name": "memos",
       "source": "./",
-      "description": "Self-hosted memos via MCP: capture, search, organize (reformat/archive/delete), and TODO management."
+      "description": "Self-hosted memos via MCP: capture, search, TODO management, single-memo cleanup (manage skill), and theme-grouped bulk reorganization (rearrange skill).",
+      "category": "productivity",
+      "tags": ["memos", "notes", "todo", "mcp", "organize"]
     }
   ]
 }
