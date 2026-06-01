@@ -1,0 +1,44 @@
+{
+  "name": "memos",
+  "description": "Self-hosted memos via MCP — create, read, search, reformat, archive, delete, and organize memos. Bundles the memos MCP server and the memos skill.",
+  "author": {
+    "name": "dakesan",
+    "email": "ho@logomix.bio"
+  },
+  "homepage": "https://github.com/dakesan/memos-mcp",
+  "repository": "https://github.com/dakesan/memos-mcp",
+  "license": "MIT",
+  "userConfig": {
+    "memos_base_url": {
+      "type": "string",
+      "title": "Memos instance URL",
+      "description": "Base URL of your memos instance, no trailing /api/v1 (e.g. http://host:5230)",
+      "required": true
+    },
+    "memos_access_token": {
+      "type": "string",
+      "title": "Memos access token",
+      "description": "Bearer PAT from Memos Settings -> Access Tokens",
+      "sensitive": true,
+      "required": true
+    },
+    "memos_auto_tag": {
+      "type": "string",
+      "title": "Auto tag (optional)",
+      "description": "Tag automatically appended to every created memo (leave empty to disable)",
+      "required": false,
+      "default": ""
+    }
+  },
+  "mcpServers": {
+    "memos": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "env": {
+        "MEMOS_BASE_URL": "${user_config.memos_base_url}",
+        "MEMOS_ACCESS_TOKEN": "${user_config.memos_access_token}",
+        "MEMOS_AUTO_TAG": "${user_config.memos_auto_tag}"
+      }
+    }
+  }
+}

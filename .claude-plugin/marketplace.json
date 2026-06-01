@@ -1,0 +1,17 @@
+{
+  "name": "memos",
+  "owner": {
+    "name": "dakesan",
+    "email": "ho@logomix.bio"
+  },
+  "metadata": {
+    "description": "memos MCP server + skill, installable as a single Claude Code plugin."
+  },
+  "plugins": [
+    {
+      "name": "memos",
+      "source": "./",
+      "description": "Self-hosted memos via MCP: capture, search, organize (reformat/archive/delete), and TODO management."
+    }
+  ]
+}

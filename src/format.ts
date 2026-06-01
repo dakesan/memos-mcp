@@ -19,14 +19,18 @@ function asListItem(formatted: string, indent: string): string {
 export function formatMemo(memo: Memo): string {
 	const tags = memo.tags.join(", ");
 
-	return [
-		`name: ${memo.name}`,
+	const lines = [`name: ${memo.name}`];
+	if (memo.state) {
+		lines.push(`state: ${memo.state}`);
+	}
+	lines.push(
 		`createTime: ${memo.createTime}`,
 		`visibility: ${memo.visibility}`,
 		`tags: [${tags}]`,
 		"content: |",
 		indentBlock(memo.content, "  "),
-	].join("\n");
+	);
+	return lines.join("\n");
 }
 
 export function formatMemoList(result: ListMemosResponse): string {

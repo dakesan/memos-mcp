@@ -25,6 +25,10 @@ See [Fork differences](#fork-differences) below for what changed.
 | `create_memo` | Create a new memo. |
 | `list_memos` | List memos (supports CEL filter expressions). |
 | `search_memos` | Search memos by keyword/tag. |
+| `get_memo` | Fetch a single memo by its uid (`memos/<uid>`). |
+| `update_memo` | Overwrite a memo's content (e.g. reformat). Returns the previous content so it can be preserved. |
+| `archive_memo` | Set a memo's state to `ARCHIVED` (reversible) or back to `NORMAL`. Preferred over delete. |
+| `delete_memo` | Permanently delete a memo. **Irreversible** — prefer `archive_memo`. |
 
 ### Comment
 
@@ -33,7 +37,23 @@ See [Fork differences](#fork-differences) below for what changed.
 | `create_comment` | Add a comment to a memo. The target memo `name` should be obtained via `list_memos` first. |
 | `list_comments` | List comments on a memo. The target memo `name` should be obtained via `list_memos` first. |
 
-## Setup
+## Install as a Claude Code plugin
+
+This repo is also a Claude Code plugin marketplace: installing the plugin gives
+you both the MCP server and the `manage` skill in one step. The prebuilt,
+dependency-bundled `dist/index.js` is committed, so no build is needed on install.
+
+```bash
+# Add this repo as a marketplace, then install the plugin
+/plugin marketplace add dakesan/memos-mcp
+/plugin install memos@memos
+```
+
+On install you are prompted for your Memos instance URL and access token
+(`memos_base_url`, `memos_access_token`, optional `memos_auto_tag`). The token
+is stored via the plugin's `sensitive` user-config field, not in plain text.
+
+## Setup (manual / development)
 
 ```bash
 npm install
