@@ -29,16 +29,5 @@
       "required": false,
       "default": ""
     }
-  },
-  "mcpServers": {
-    "memos": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
-      "env": {
-        "MEMOS_BASE_URL": "${user_config.memos_base_url}",
-        "MEMOS_ACCESS_TOKEN": "${user_config.memos_access_token}",
-        "MEMOS_AUTO_TAG": "${user_config.memos_auto_tag}"
-      }
-    }
   }
 }
