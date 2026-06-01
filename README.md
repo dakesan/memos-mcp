@@ -40,8 +40,9 @@ See [Fork differences](#fork-differences) below for what changed.
 ## Install as a Claude Code plugin
 
 This repo is also a Claude Code plugin marketplace: installing the plugin gives
-you both the MCP server and the `manage` skill in one step. The prebuilt,
-dependency-bundled `dist/index.js` is committed, so no build is needed on install.
+you the MCP server plus the `manage` and `rearrange` skills in one step. The
+prebuilt, dependency-bundled `dist/index.js` is committed, so no build is needed
+on install.
 
 ```bash
 # Add this repo as a marketplace, then install the plugin
@@ -52,6 +53,34 @@ dependency-bundled `dist/index.js` is committed, so no build is needed on instal
 On install you are prompted for your Memos instance URL and access token
 (`memos_base_url`, `memos_access_token`, optional `memos_auto_tag`). The token
 is stored via the plugin's `sensitive` user-config field, not in plain text.
+
+### Updating
+
+The plugin pins a `version` in `plugin.json`, so you only receive updates when
+that version is bumped. To pull a newer release:
+
+```bash
+/plugin marketplace update memos   # refresh the marketplace catalog
+/plugin update memos@memos         # update the installed plugin
+```
+
+Updating a plugin requires a restart to apply (during local development you can
+instead `/reload-plugins` to hot-reload skills without restarting). Verify what
+is installed with `claude plugin list` (look at the `Version` line).
+
+### Skills
+
+Plugin skills are namespaced under the plugin name and are **model-invoked**
+(Claude triggers them by context); you can also call them explicitly.
+
+| Skill | Invoke | Use it for |
+|-------|--------|-----------|
+| `manage` | `/memos:manage` | Capture a quick note, manage `#todo` tasks, look something up, or clean up / reformat a single memo. |
+| `rearrange` | `/memos:rearrange` | Bulk-reorganize the whole instance into clean, theme-grouped posts. Scans only memos lacking the `#rearranged` tag, merges duplicates without losing information, and tags each consolidated post `#rearranged`. Archiving the superseded originals is left to you. |
+
+After installing or updating, run `/reload-plugins` and confirm the skills appear
+in `/help`. Both skills read the Memos instance URL and token from the MCP server
+config (`MEMOS_BASE_URL` / `MEMOS_ACCESS_TOKEN`) — they never hardcode credentials.
 
 ## Setup (manual / development)
 
