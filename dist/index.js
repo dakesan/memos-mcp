@@ -35908,10 +35908,35 @@ if (process.argv.includes("--http")) {
   const { StreamableHTTPTransport: StreamableHTTPTransport2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports2));
   const { serve: serve2 } = await Promise.resolve().then(() => (init_dist3(), dist_exports3));
   const { Hono: Hono3 } = await Promise.resolve().then(() => (init_dist(), dist_exports));
+  const { timingSafeEqual: timingSafeEqual2 } = await import("crypto");
   const port = process.env.PORT ? Number(process.env.PORT) : 0;
+  const authToken = process.env.MCP_AUTH_TOKEN;
+  if (!authToken) {
+    console.error(
+      "Refusing to start HTTP mode without MCP_AUTH_TOKEN. Set MCP_AUTH_TOKEN to a strong secret to protect the /mcp endpoint."
+    );
+    process.exit(1);
+  }
+  const expectedToken = Buffer.from(authToken);
+  const isValidToken = (provided) => {
+    const got = Buffer.from(provided);
+    if (got.length !== expectedToken.length) {
+      return false;
+    }
+    return timingSafeEqual2(got, expectedToken);
+  };
   const transport = new StreamableHTTPTransport2();
   await mcpServer.connect(transport);
   const app = new Hono3();
+  app.use("/mcp", async (c, next) => {
+    const authHeader = c.req.header("Authorization") ?? "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+    const provided = bearer || c.req.header("X-API-Key") || c.req.query("key") || "";
+    if (!isValidToken(provided)) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
+    await next();
+  });
   app.all("/mcp", (c) => transport.handleRequest(c));
   app.get("/health", (c) => c.json({ status: "ok" }));
   serve2({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
