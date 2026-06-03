@@ -70,6 +70,31 @@ if (process.argv.includes("--http")) {
 		verifyJwt = createJwtVerifier({ issuer: oauthIssuer, resource });
 	}
 
+	// Identity allowlist for OAuth-authenticated requests. A valid token only
+	// proves the caller authenticated to the IdP — with open sign-up that is
+	// anyone. Until OAUTH_ALLOWED_EMAILS / OAUTH_ALLOWED_SUBS is set, run in
+	// "learn mode": accept any valid token but log its identity so the owner can
+	// be pinned down. Once configured, only those identities are accepted.
+	const allowedEmails = new Set(
+		(process.env.OAUTH_ALLOWED_EMAILS ?? "")
+			.split(",")
+			.map((s) => s.trim().toLowerCase())
+			.filter(Boolean),
+	);
+	const allowedSubs = new Set(
+		(process.env.OAUTH_ALLOWED_SUBS ?? "")
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean),
+	);
+	const hasIdentityAllowlist = allowedEmails.size > 0 || allowedSubs.size > 0;
+	const isAllowedIdentity = (sub: string, email: string): boolean => {
+		if (!hasIdentityAllowlist) return true;
+		if (sub && allowedSubs.has(sub)) return true;
+		if (email && allowedEmails.has(email.toLowerCase())) return true;
+		return false;
+	};
+
 	const transport = new StreamableHTTPTransport();
 	await mcpServer.connect(transport);
 
@@ -89,18 +114,28 @@ if (process.argv.includes("--http")) {
 					: "none";
 		await next();
 		console.error(
-			`[req] ${c.req.method} ${c.req.path} cred=${cred} q=${JSON.stringify(queryKeys)} ua=${JSON.stringify(c.req.header("User-Agent") ?? "")} -> ${c.res.status}`,
+			`[req] ${new Date().toISOString()} ${c.req.method} ${c.req.path} cred=${cred} q=${JSON.stringify(queryKeys)} ua=${JSON.stringify(c.req.header("User-Agent") ?? "")} -> ${c.res.status}`,
 		);
 	});
 
 	// Protected Resource Metadata (RFC 9728) — lets an OAuth-capable MCP client
 	// discover which authorization server guards this resource.
 	if (oauthEnabled) {
-		const prm = {
+		// Only advertise scopes the authorization server actually approves;
+		// advertising unknown scopes makes the AS reject the authorization
+		// request. Configure via OAUTH_SCOPES (comma-separated) when needed;
+		// otherwise omit scopes_supported entirely.
+		const scopes =
+			process.env.OAUTH_SCOPES?.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean) ?? [];
+		const prm: Record<string, unknown> = {
 			resource,
 			authorization_servers: [oauthIssuer],
-			scopes_supported: ["mcp:tools/list", "mcp:tools/call"],
 		};
+		if (scopes.length > 0) {
+			prm.scopes_supported = scopes;
+		}
 		const prmHandler = (c: Context) => c.json(prm);
 		app.get("/.well-known/oauth-protected-resource", prmHandler);
 		app.get("/.well-known/oauth-protected-resource/mcp", prmHandler);
@@ -127,9 +162,23 @@ if (process.argv.includes("--http")) {
 		// 2) OAuth Bearer JWT (three dot-separated segments).
 		if (verifyJwt && bearer.split(".").length === 3) {
 			try {
-				await verifyJwt(bearer);
-				await next();
-				return;
+				const payload = (await verifyJwt(bearer)) as {
+					sub?: unknown;
+					email?: unknown;
+				};
+				const sub = typeof payload.sub === "string" ? payload.sub : "";
+				const email = typeof payload.email === "string" ? payload.email : "";
+				if (isAllowedIdentity(sub, email)) {
+					console.error(
+						`[oauth] authorized sub=${sub} email=${JSON.stringify(email)}`,
+					);
+					await next();
+					return;
+				}
+				console.error(
+					`[oauth] DENIED (identity not in allowlist) sub=${sub} email=${JSON.stringify(email)}`,
+				);
+				return c.json({ error: "forbidden" }, 403);
 			} catch (err) {
 				console.error(
 					`[oauth] JWT verification failed: ${(err as Error).message}`,

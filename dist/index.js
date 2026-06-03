@@ -37579,6 +37579,19 @@ if (process.argv.includes("--http")) {
     const { createJwtVerifier: createJwtVerifier2 } = await Promise.resolve().then(() => (init_oauth(), oauth_exports));
     verifyJwt = createJwtVerifier2({ issuer: oauthIssuer, resource });
   }
+  const allowedEmails = new Set(
+    (process.env.OAUTH_ALLOWED_EMAILS ?? "").split(",").map((s2) => s2.trim().toLowerCase()).filter(Boolean)
+  );
+  const allowedSubs = new Set(
+    (process.env.OAUTH_ALLOWED_SUBS ?? "").split(",").map((s2) => s2.trim()).filter(Boolean)
+  );
+  const hasIdentityAllowlist = allowedEmails.size > 0 || allowedSubs.size > 0;
+  const isAllowedIdentity = (sub, email3) => {
+    if (!hasIdentityAllowlist) return true;
+    if (sub && allowedSubs.has(sub)) return true;
+    if (email3 && allowedEmails.has(email3.toLowerCase())) return true;
+    return false;
+  };
   const transport = new StreamableHTTPTransport2();
   await mcpServer.connect(transport);
   const app = new Hono3();
@@ -37587,15 +37600,18 @@ if (process.argv.includes("--http")) {
     const cred = c.req.header("Authorization") ? "header:authorization" : c.req.header("X-API-Key") ? "header:x-api-key" : queryKeys.includes("key") ? "query:key" : "none";
     await next();
     console.error(
-      `[req] ${c.req.method} ${c.req.path} cred=${cred} q=${JSON.stringify(queryKeys)} ua=${JSON.stringify(c.req.header("User-Agent") ?? "")} -> ${c.res.status}`
+      `[req] ${(/* @__PURE__ */ new Date()).toISOString()} ${c.req.method} ${c.req.path} cred=${cred} q=${JSON.stringify(queryKeys)} ua=${JSON.stringify(c.req.header("User-Agent") ?? "")} -> ${c.res.status}`
     );
   });
   if (oauthEnabled) {
+    const scopes = process.env.OAUTH_SCOPES?.split(",").map((s2) => s2.trim()).filter(Boolean) ?? [];
     const prm = {
       resource,
-      authorization_servers: [oauthIssuer],
-      scopes_supported: ["mcp:tools/list", "mcp:tools/call"]
+      authorization_servers: [oauthIssuer]
     };
+    if (scopes.length > 0) {
+      prm.scopes_supported = scopes;
+    }
     const prmHandler = (c) => c.json(prm);
     app.get("/.well-known/oauth-protected-resource", prmHandler);
     app.get("/.well-known/oauth-protected-resource/mcp", prmHandler);
@@ -37610,9 +37626,20 @@ if (process.argv.includes("--http")) {
     }
     if (verifyJwt && bearer.split(".").length === 3) {
       try {
-        await verifyJwt(bearer);
-        await next();
-        return;
+        const payload = await verifyJwt(bearer);
+        const sub = typeof payload.sub === "string" ? payload.sub : "";
+        const email3 = typeof payload.email === "string" ? payload.email : "";
+        if (isAllowedIdentity(sub, email3)) {
+          console.error(
+            `[oauth] authorized sub=${sub} email=${JSON.stringify(email3)}`
+          );
+          await next();
+          return;
+        }
+        console.error(
+          `[oauth] DENIED (identity not in allowlist) sub=${sub} email=${JSON.stringify(email3)}`
+        );
+        return c.json({ error: "forbidden" }, 403);
       } catch (err) {
         console.error(
           `[oauth] JWT verification failed: ${err.message}`
