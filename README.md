@@ -104,6 +104,81 @@ npm run dev -- --http
 npm run build
 ```
 
+## Remote HTTP mode (network-exposed, with OAuth)
+
+`--http` runs the server over Streamable HTTP instead of stdio, so a remote MCP
+client (such as a hosted Claude custom connector) can reach it. It listens on
+`127.0.0.1:$PORT`; put a TLS-terminating reverse proxy or tunnel (Caddy, nginx,
+Cloudflare Tunnel, Tailscale Funnel, …) in front to expose it publicly. Hosted
+connectors such as claude.ai reach servers on the standard HTTPS port **443**.
+
+### Deployment is pluggable
+
+Exposure and authentication are two independent choices — neither any specific
+tunnel nor any specific identity provider is baked into the code:
+
+- **Public exposure** — anything that terminates TLS and forwards to
+  `127.0.0.1:$PORT` works: a reverse proxy (Caddy, nginx), Cloudflare Tunnel,
+  Tailscale Funnel, an SSH tunnel, … The server knows nothing about the tunnel.
+  (Hosted connectors such as claude.ai connect on port **443**.)
+- **Authentication** — the static `MCP_AUTH_TOKEN` (always available) and/or
+  OAuth. OAuth turns on simply by pointing `OAUTH_ISSUER` at *any*
+  standards-compliant authorization server (Descope, WorkOS, Auth0, Clerk, a
+  self-hosted one, …); the server discovers that issuer's metadata and JWKS at
+  runtime and is not tied to any provider. Leave `OAUTH_ISSUER` unset to run
+  static-token-only (e.g. for Claude Code CLI / Desktop, which can send a header).
+
+Mix and match: pick one exposure method and one or both auth methods.
+
+Endpoints: `POST /mcp` (the MCP endpoint), `GET /health`, and — when OAuth is
+enabled — `GET /.well-known/oauth-protected-resource[/mcp]`
+([RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)).
+
+### Authentication
+
+HTTP mode refuses to start without `MCP_AUTH_TOKEN`, so the endpoint is never
+exposed unauthenticated. A request is accepted if it presents **either**:
+
+1. **A static token** — `MCP_AUTH_TOKEN`, sent as `Authorization: Bearer <token>`,
+   `X-API-Key: <token>`, or `?key=<token>`. Good for clients that can set a
+   header/query (Claude Code CLI, Claude Desktop via `mcp-remote`).
+2. **An OAuth 2.1 Bearer JWT** — enabled by setting `OAUTH_ISSUER` (and
+   `MCP_PUBLIC_URL`). The server discovers the issuer's JWKS from its
+   authorization-server metadata and verifies the token's signature, `iss`, and
+   `aud` (must equal `${MCP_PUBLIC_URL}/mcp`,
+   [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707)). On an unauthenticated
+   request it returns `401` with a `WWW-Authenticate` header pointing at the
+   resource metadata, so OAuth-capable clients can discover the authorization
+   server. Good for hosted connectors (claude.ai) that only do OAuth.
+
+For the OAuth path to work with a client that self-registers (e.g. claude.ai),
+the authorization server must support **Dynamic Client Registration**
+([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591)) and must allow
+`${MCP_PUBLIC_URL}/mcp` as a token audience/resource.
+
+### Identity allowlist
+
+A valid OAuth token only proves the caller signed in to the IdP — with open
+sign-up that can be anyone. Set `OAUTH_ALLOWED_SUBS` and/or `OAUTH_ALLOWED_EMAILS`
+(comma-separated) to restrict access to specific identities; non-matching tokens
+get `403`. While both are unset the server runs in "learn mode": it accepts any
+valid token but logs its `sub`/`email` so you can find the value to pin.
+
+### HTTP-mode environment variables
+
+These apply only when running with `--http` (the stdio mode uses just the
+variables in [Environment variables](#environment-variables) above).
+
+| Name | Description |
+|------|-------------|
+| `PORT` | Port to listen on (bound to `127.0.0.1`). `0`/unset picks a random free port. |
+| `MCP_AUTH_TOKEN` | **Required in `--http` mode.** Shared secret for the static-token path. |
+| `MCP_PUBLIC_URL` | Public origin the server is reached at, e.g. `https://mcp.example.com` (no trailing `/mcp`). Required when `OAUTH_ISSUER` is set; the OAuth resource/audience is `${MCP_PUBLIC_URL}/mcp`. |
+| `OAUTH_ISSUER` | Optional. Authorization-server issuer base URL. Setting it enables the OAuth Bearer-JWT path. |
+| `OAUTH_ALLOWED_SUBS` | Optional, comma-separated. Allowed token `sub` values. |
+| `OAUTH_ALLOWED_EMAILS` | Optional, comma-separated. Allowed token `email` values. |
+| `OAUTH_SCOPES` | Optional, comma-separated. Scopes to advertise in the resource metadata. Default: none. |
+
 ## MCP client configuration
 
 ```json
