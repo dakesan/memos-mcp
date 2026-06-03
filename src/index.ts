@@ -1,4 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Context } from "hono";
 import { MemosClient } from "./memos-client.ts";
 import { createMcpServer } from "./server.ts";
 
@@ -46,25 +47,105 @@ if (process.argv.includes("--http")) {
 		return timingSafeEqual(got, expectedToken);
 	};
 
+	// Optional OAuth 2.1 (for clients that require it, e.g. the claude.ai custom
+	// connector). When OAUTH_ISSUER is set, the /mcp endpoint also accepts a valid
+	// Bearer JWT issued by that authorization server, and advertises its location
+	// via Protected Resource Metadata (RFC 9728). The static token above keeps
+	// working for clients that send it (Claude Code CLI, Desktop via mcp-remote).
+	const oauthIssuer = process.env.OAUTH_ISSUER;
+	const publicUrl = process.env.MCP_PUBLIC_URL?.replace(/\/+$/, "");
+	const oauthEnabled = Boolean(oauthIssuer);
+	let resource = "";
+	let verifyJwt: ((token: string) => Promise<unknown>) | null = null;
+	if (oauthIssuer) {
+		if (!publicUrl) {
+			console.error(
+				"OAUTH_ISSUER is set but MCP_PUBLIC_URL is missing. " +
+					"Set MCP_PUBLIC_URL to the public origin (e.g. https://host:10000).",
+			);
+			process.exit(1);
+		}
+		resource = `${publicUrl}/mcp`;
+		const { createJwtVerifier } = await import("./oauth.ts");
+		verifyJwt = createJwtVerifier({ issuer: oauthIssuer, resource });
+	}
+
 	const transport = new StreamableHTTPTransport();
 	await mcpServer.connect(transport);
 
 	const app = new Hono();
 
-	// Gate the MCP endpoint. Accept the secret via Authorization: Bearer <token>,
-	// X-API-Key: <token>, or ?key=<token> so it works regardless of how the
-	// client (e.g. a Claude remote connector) is able to present credentials.
+	// Request logging — surfaces how remote clients (e.g. a Claude connector)
+	// actually hit the server: path, which credential form arrived, query keys,
+	// User-Agent, and the response status.
+	app.use("*", async (c, next) => {
+		const queryKeys = Object.keys(c.req.query());
+		const cred = c.req.header("Authorization")
+			? "header:authorization"
+			: c.req.header("X-API-Key")
+				? "header:x-api-key"
+				: queryKeys.includes("key")
+					? "query:key"
+					: "none";
+		await next();
+		console.error(
+			`[req] ${c.req.method} ${c.req.path} cred=${cred} q=${JSON.stringify(queryKeys)} ua=${JSON.stringify(c.req.header("User-Agent") ?? "")} -> ${c.res.status}`,
+		);
+	});
+
+	// Protected Resource Metadata (RFC 9728) — lets an OAuth-capable MCP client
+	// discover which authorization server guards this resource.
+	if (oauthEnabled) {
+		const prm = {
+			resource,
+			authorization_servers: [oauthIssuer],
+			scopes_supported: ["mcp:tools/list", "mcp:tools/call"],
+		};
+		const prmHandler = (c: Context) => c.json(prm);
+		app.get("/.well-known/oauth-protected-resource", prmHandler);
+		app.get("/.well-known/oauth-protected-resource/mcp", prmHandler);
+	}
+
+	// Gate the MCP endpoint. A request is authorized if it presents EITHER the
+	// static token (Authorization: Bearer <token>, X-API-Key, or ?key=) — used by
+	// Claude Code CLI / Desktop — OR a valid OAuth Bearer JWT — used by the
+	// claude.ai custom connector.
 	app.use("/mcp", async (c, next) => {
 		const authHeader = c.req.header("Authorization") ?? "";
 		const bearer = authHeader.startsWith("Bearer ")
 			? authHeader.slice("Bearer ".length)
 			: "";
-		const provided =
+
+		// 1) Static shared secret.
+		const staticCred =
 			bearer || c.req.header("X-API-Key") || c.req.query("key") || "";
-		if (!isValidToken(provided)) {
-			return c.json({ error: "unauthorized" }, 401);
+		if (staticCred && isValidToken(staticCred)) {
+			await next();
+			return;
 		}
-		await next();
+
+		// 2) OAuth Bearer JWT (three dot-separated segments).
+		if (verifyJwt && bearer.split(".").length === 3) {
+			try {
+				await verifyJwt(bearer);
+				await next();
+				return;
+			} catch (err) {
+				console.error(
+					`[oauth] JWT verification failed: ${(err as Error).message}`,
+				);
+			}
+		}
+
+		// 3) Unauthorized. Advertise the resource metadata so OAuth clients can
+		// discover the authorization server and start the flow (RFC 9728).
+		if (oauthEnabled) {
+			c.header(
+				"WWW-Authenticate",
+				`Bearer resource_metadata="${publicUrl}/.well-known/oauth-protected-resource"`,
+			);
+		}
+		return c.json({ error: "unauthorized" }, 401);
 	});
 
 	app.all("/mcp", (c) => transport.handleRequest(c));
